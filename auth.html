@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Secure Access</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      background: #121212;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 1rem;
+      margin-top: 20px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .warning {
+      color: red;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🔐 Fingerprint Required</h1>
+  <p>Please authenticate to access the secure website.</p>
+  <button onclick="authenticate()">Authenticate</button>
+
+  <div id="warning" class="warning"></div>
+
+  <script>
+    async function authenticate() {
+      if (!window.PublicKeyCredential) {
+        document.getElementById("warning").textContent = "Your browser does not support WebAuthn.";
+        return;
+      }
+
+      try {
+        const publicKey = {
+          challenge: new Uint8Array(32),
+          timeout: 60000,
+          userVerification: "required"
+        };
+
+        // This will trigger biometric prompt
+        await navigator.credentials.get({ publicKey });
+
+        // Redirect on success
+        window.location.href = "https://jeetendra555t.github.io/lux/"; // change this to your site
+
+      } catch (err) {
+        document.getElementById("warning").textContent = "Authentication failed or was canceled.";
+        console.error(err);
+      }
+    }
+  </script>
+
+</body>
+</html>
