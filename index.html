@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Center Monitoring Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    
+  /* Replace the quadrant-related styles with these */
+  .quadrant-container {
+    display: grid;
+    grid-template-areas:
+      "north-west north-east"
+      "south-west south-east";
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2rem;
+    margin: 1.5rem 0;
+    width: 100%;
+  }
+
+  .quadrant {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 2px solid #00bcd455;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .north-west { grid-area: north-west; }
+  .north-east { grid-area: north-east; }
+  .south-west { grid-area: south-west; }
+  .south-east { grid-area: south-east; }
+
+  .quadrant-title {
+    text-align: center;
+    margin-bottom: 1rem;
+    color: var(--primary);
+    font-weight: bold;
+    font-size: 1.2rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #333;
+  }
+
+  .quadrant-grid {
+    display: grid;
+    grid-template-columns: repeat(3, var(--rack-size));
+    grid-template-rows: repeat(2, var(--rack-size));
+    gap: 1rem;
+    justify-content: center;
+    flex-grow: 1;
+  }
+
+  @media (max-width: 768px) {
+    .quadrant-container {
+      grid-template-areas:
+        "north-west"
+        "north-east"
+        "south-west"
+        "south-east";
+      grid-template-columns: 1fr;
+    }
+    
+    .quadrant-grid {
+      grid-template-columns: repeat(2, var(--rack-size));
+      grid-template-rows: repeat(3, var(--rack-size));
+    }
+  }
+    :root {
+      --primary: #00bcd4;
+      --danger: #f44336;
+      --warning: #ff9800;
+      --success: #4caf50;
+      --idle: #9e9e9e;
+      --bg-dark: #121212;
+      --bg-darker: #0a0a0a;
+      --card-bg: #1e1e1e;
+      --text-light: #f5f5f5;
+      --rack-size: 120px;
+      --group-border: 2px solid #00bcd455;
+      --rack-border: 1px solid #333;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg-dark);
+      color: var(--text-light);
+      line-height: 1.6;
+    }
+    
+    header {
+      background: var(--bg-darker);
+      padding: 1.5rem;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+    
+    h1 {
+      margin: 0;
+      font-size: 2rem;
+      color: var(--primary);
+    }
+    
+    nav {
+      display: flex;
+      justify-content: center;
+      background: var(--bg-darker);
+      padding: 0.5rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      border-bottom: 1px solid #333;
+    }
+    
+    nav button {
+      background: #333;
+      color: white;
+      padding: 0.8rem 1.5rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+    
+    nav button:hover {
+      background: #444;
+    }
+    
+    nav button.active {
+      background: var(--primary);
+    }
+    
+    main {
+      padding: 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .file-upload {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid #333;
+    }
+    
+    .tab {
+      display: none;
+      animation: fadeIn 0.5s ease;
+    }
+    
+    .tab.active {
+      display: block;
+    }
+    
+    .rack {
+      width: var(--rack-size);
+      height: var(--rack-size);
+      padding: 0.5rem;
+      border-radius: 8px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      border: var(--rack-border);
+    }
+    
+    .rack:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 12px rgba(0, 188, 212, 0.3);
+      border-color: var(--primary);
+    }
+    
+    .rack-id {
+      font-weight: bold;
+      font-size: 1rem;
+      margin-bottom: 0.3rem;
+      color: var(--primary);
+    }
+    
+    .rack-value {
+      font-size: 1.1rem;
+      margin: 0.3rem 0;
+      font-weight: bold;
+    }
+    
+    .rack-status {
+      font-size: 0.8rem;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    
+    .status-active {
+      background: var(--success);
+    }
+    
+    .status-idle {
+      background: var(--idle);
+    }
+    
+    .status-fault {
+      background: var(--danger);
+    }
+    
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+    
+    .card {
+      background: var(--card-bg);
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border: 1px solid #333;
+    }
+    
+    .card:hover {
+      border-color: var(--primary);
+    }
+    
+    .card-title {
+      margin-top: 0;
+      color: var(--primary);
+      font-size: 1.1rem;
+    }
+    
+    .card-value {
+      font-size: 2rem;
+      margin: 0.5rem 0;
+      font-weight: bold;
+    }
+    
+    .alert {
+      background: var(--danger);
+      padding: 1rem;
+      text-align: center;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      animation: pulse 2s infinite;
+      display: none;
+      border: 1px solid #ff5252;
+    }
+    
+    .fault-reason {
+      font-size: 0.7rem;
+      margin-top: 0.3rem;
+      color: #ffcccc;
+    }
+    
+    .rack-content {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    
+    .rack.idle .rack-content {
+      display: none;
+    }
+    
+    .idle-indicator {
+      display: none;
+      font-size: 0.9rem;
+      color: var(--idle);
+    }
+    
+    .rack.idle .idle-indicator {
+      display: block;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    
+    .rack-group {
+      display: grid;
+      grid-template-columns: repeat(3, var(--rack-size));
+      grid-template-rows: repeat(2, var(--rack-size));
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding: 1.5rem;
+      background: #1a1a1a;
+      border-radius: 12px;
+      border: var(--group-border);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .rack-group:hover {
+      border-color: var(--primary);
+      box-shadow: 0 6px 12px rgba(0, 188, 212, 0.2);
+    }
+    
+    .rack-group-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 2rem;
+    }
+    
+    .rack-group-title {
+      grid-column: 1 / -1;
+      text-align: center;
+      margin-bottom: 0.5rem;
+      color: var(--primary);
+      font-weight: bold;
+      font-size: 1.2rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #333;
+    }
+    
+    .rack-groups-top {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin-bottom: 2rem;
+    }
+    
+    .rack-groups-bottom {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+      100% { transform: scale(1); }
+    }
+    
+    @media (max-width: 768px) {
+      :root {
+        --rack-size: 100px;
+      }
+      
+      nav button {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+      }
+      
+      .rack-group {
+        grid-template-columns: repeat(2, var(--rack-size));
+        grid-template-rows: repeat(3, var(--rack-size));
+        padding: 1rem;
+      }
+      
+      .rack-groups-top, .rack-groups-bottom {
+        flex-direction: column;
+        gap: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Data Center Monitoring Dashboard</h1>
+  </header>
+
+  <nav>
+    <button onclick="showTab('home')" class="active">Overview</button>
+    <button onclick="showTab('heat')">Heat Map</button>
+    <button onclick="showTab('cooling')">Cooling System</button>
+    <button onclick="showTab('vibration')">Vibration</button>
+    <button onclick="showTab('power')">Power Usage</button>
+    <button onclick="showTab('faults')">Fault Detection</button>
+    <button onclick="showTab('humidity')">Humidity</button>
+  </nav>
+
+  <main>
+    <div class="file-upload">
+      <input type="file" id="fileInput" accept=".xlsx, .xls" />
+      <p>Upload your data center metrics file to begin monitoring</p>
+    </div>
+
+    <div id="alertBox" class="alert">
+      <strong>CRITICAL ALERT:</strong> Moisture detected! Initiating emergency shutdown of all systems!
+    </div>
+
+    <div id="home" class="tab active">
+      <h2>Data Center Overview</h2>
+      <div class="summary">
+        <div class="card">
+          <h3 class="card-title">Average Temperature</h3>
+          <div class="card-value" id="avgTemp">-- °C</div>
+          <p>Optimal range: 18°C - 27°C</p>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Cooling Efficiency</h3>
+          <div class="card-value" id="avgCooling">-- %</div>
+          <p>Higher is better</p>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Heat Reclamation</h3>
+          <div class="card-value" id="heatReuse">-- kWh</div>
+          <p>Reused for building heating</p>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Faulty Racks</h3>
+          <div class="card-value" id="faultyRacks">--</div>
+          <p>Requiring attention</p>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Power Consumption</h3>
+          <div class="card-value" id="totalPower">-- kW</div>
+          <p>Current draw</p>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Humidity Level</h3>
+          <div class="card-value" id="avgHumidity">-- %</div>
+          <p>Optimal range: 40% - 60%</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="heat" class="tab">
+      <h2>Server Rack Temperature Map</h2>
+      <p>Real-time temperature monitoring across all racks</p>
+      <div class="rack-group-container" id="heatGrid"></div>
+    </div>
+
+    <div id="cooling" class="tab">
+      <h2>Cooling System Distribution</h2>
+      <p>Dynamic cooling adjustment based on heat load</p>
+      <div class="rack-group-container" id="coolingGrid"></div>
+    </div>
+
+    <div id="vibration" class="tab">
+      <h2>Vibration Monitoring</h2>
+      <p>Mechanical vibration levels (mm/s)</p>
+      <div class="rack-group-container" id="vibrationGrid"></div>
+    </div>
+
+    <div id="power" class="tab">
+      <h2>Power Consumption</h2>
+      <p>Energy usage per rack (Watts)</p>
+      <div class="rack-group-container" id="powerGrid"></div>
+    </div>
+
+    <div id="faults" class="tab">
+      <h2>Fault Detection System</h2>
+      <p>Identified hardware and environmental issues</p>
+      <div class="rack-group-container" id="faultGrid"></div>
+    </div>
+
+    <div id="humidity" class="tab">
+      <h2>Humidity Monitoring</h2>
+      <p>Relative humidity levels (%)</p>
+      <div class="rack-group-container" id="humidityGrid"></div>
+    </div>
+  </main>
+
+  <script>
+    // Configuration
+    const CONFIG = {
+      TEMP_THRESHOLD: 85,       // °C - Critical temperature
+      TEMP_WARNING: 65,         // °C - Warning threshold
+      TEMP_PERSISTENCE: 3,      // Cycles before fault is triggered
+      VIBRATION_THRESHOLD: 12,  // mm/s - Excessive vibration
+      POWER_THRESHOLD: 350,      // W - Power spike threshold
+      HUMIDITY_THRESHOLD: 60,    // % - Moisture threshold
+      BASE_COOLING: 50,         // Base cooling percentage
+      COOLING_RESPONSE: 1.5,    // Cooling response factor
+      HEAT_GENERATION: 1.2,     // Active rack heat generation
+      IDLE_POWER_RATIO: 0.3,    // Idle power usage ratio
+      SIMULATION_INTERVAL: 3000 // Update interval in ms
+    };
+
+    // State
+    let racks = [];
+    let simulationInterval;
+    let faultHistory = {};
+    let dataCenterStats = {
+      totalHeatReuse: 0,
+      totalFaultyDisks: 0
+    };
+
+    // DOM Elements
+    const fileInput = document.getElementById('fileInput');
+    const alertBox = document.getElementById('alertBox');
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      fileInput.addEventListener('change', handleFileUpload);
+      generateSampleData(); // For demo purposes
+    });
+
+    function generateSampleData() {
+      const sampleData = [];
+      const rackCount = 24; // 4 groups of 6 racks
+      
+      for (let i = 0; i < rackCount; i++) {
+        sampleData.push({
+          "Rack ID": `RACK-${String(i+1).padStart(2, '0')}`,
+          "Temperature": 30 + Math.random() * 15,
+          "Vibration": 2 + Math.random() * 6,
+          "Power": 150 + Math.random() * 120,
+          "Humidity": 45 + Math.random() * 10, // More controlled humidity range
+          "Status": Math.random() > 0.2 ? 'Active' : 'Idle'
+        });
+      }
+      
+      initializeRacks(sampleData);
+      startSimulation();
+    }
+
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet);
+        
+        initializeRacks(json);
+        startSimulation();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function initializeRacks(data) {
+      // Clear any existing simulation
+      if (simulationInterval) clearInterval(simulationInterval);
+      
+      // Initialize racks with realistic values
+      racks = data.map((row, i) => {
+        const baseTemp = row.Temperature || 30 + Math.random() * 15;
+        return {
+          id: row["Rack ID"] || `RACK-${String(i+1).padStart(2, '0')}`,
+          temp: baseTemp,
+          originalTemp: baseTemp,
+          vibration: row.Vibration || (2 + Math.random() * 6),
+          cooling: CONFIG.BASE_COOLING,
+          power: row.Power || (150 + Math.random() * 120),
+          humidity: row.Humidity || (45 + Math.random() * 10), // Fixed humidity from input
+          status: row.Status || (Math.random() > 0.2 ? 'Active' : 'Idle'),
+          faults: [],
+          tempPersistence: 0,
+          coolingEfficiency: 0.6 + Math.random() * 0.3,
+          heatGeneration: CONFIG.HEAT_GENERATION + Math.random() * 0.5
+        };
+      });
+      
+      // Initialize fault history
+      faultHistory = {};
+      racks.forEach(rack => {
+        faultHistory[rack.id] = {
+          highTempCount: 0,
+          lastTemp: rack.temp
+        };
+      });
+      
+      // Reset stats
+      dataCenterStats = {
+        totalHeatReuse: 0,
+        totalFaultyDisks: 0
+      };
+    }
+
+    function startSimulation() {
+      simulationInterval = setInterval(simulateDataCenter, CONFIG.SIMULATION_INTERVAL);
+      renderDashboard();
+    }
+
+    function simulateDataCenter() {
+      let totalTemp = 0;
+      let totalCooling = 0;
+      let totalPower = 0;
+      let totalHumidity = 0;
+      let moistureDetected = false;
+
+      // First pass: calculate metrics and detect moisture
+      racks.forEach(rack => {
+        totalTemp += rack.temp;
+        totalCooling += rack.cooling;
+        totalPower += rack.power;
+        totalHumidity += rack.humidity;
+
+        if (rack.humidity > CONFIG.HUMIDITY_THRESHOLD) {
+          moistureDetected = true;
+        }
+      });
+
+      // Handle moisture emergency
+      if (moistureDetected) {
+        alertBox.style.display = 'block';
+        racks.forEach(rack => {
+          rack.status = 'Idle';
+          if (!rack.faults.includes('High Humidity')) {
+            rack.faults.push('High Humidity');
+          }
+        });
+      } else {
+        alertBox.style.display = 'none';
+      }
+
+      // Update cooling based on temperature (dynamic adjustment)
+      racks.forEach(rack => {
+        // Calculate required cooling based on temperature
+        const tempDiff = rack.temp - 25; // Target 25°C
+        const coolingAdjustment = tempDiff * CONFIG.COOLING_RESPONSE * rack.coolingEfficiency;
+        
+        // Apply cooling adjustment with some randomness
+        rack.cooling = Math.min(100, Math.max(20, 
+          CONFIG.BASE_COOLING + coolingAdjustment + (Math.random() * 10 - 5)
+        ));
+        
+        // Calculate cooling effect
+        const coolingEffect = (rack.cooling / 100) * rack.coolingEfficiency * 2;
+        
+        // Update temperature based on status
+        if (rack.status === 'Active' && !rack.faults.length) {
+          // Active racks generate heat but also get cooled
+          rack.temp = Math.max(18, 
+            Math.min(90, rack.temp - coolingEffect + (rack.heatGeneration + Math.random() * 0.5))
+          );
+        } else {
+          // Idle or faulty racks cool down
+          rack.temp = Math.max(18, rack.temp - coolingEffect * 1.5);
+        }
+        
+        // Small random changes in other metrics (except humidity)
+        rack.vibration = Math.max(0.1, rack.vibration + (Math.random() * 0.4 - 0.2));
+        
+        // Power usage based on status
+        if (rack.status === 'Active' && !rack.faults.length) {
+          rack.power = Math.max(50, rack.power + (Math.random() * 15 - 7.5));
+        } else {
+          rack.power = Math.max(10, rack.power * CONFIG.IDLE_POWER_RATIO);
+        }
+      });
+
+      // Detect faults after state updates
+      detectFaults();
+      
+      // Update data center stats
+      const avgTemp = totalTemp / racks.length;
+      dataCenterStats.totalHeatReuse = avgTemp * 1.8 * racks.length;
+      dataCenterStats.totalFaultyDisks = racks.filter(r => r.faults.length).length * 2;
+      
+      renderDashboard();
+    }
+
+    function detectFaults() {
+      racks.forEach(rack => {
+        // Reset faults for re-evaluation (except humidity which is handled separately)
+        rack.faults = rack.faults.filter(f => f.includes('Humidity'));
+        
+        // Check temperature persistence
+        if (rack.temp > CONFIG.TEMP_THRESHOLD) {
+          faultHistory[rack.id].highTempCount++;
+          if (faultHistory[rack.id].highTempCount >= CONFIG.TEMP_PERSISTENCE) {
+            rack.faults.push(`High Temp (${rack.temp.toFixed(1)}°C)`);
+          }
+        } else {
+          faultHistory[rack.id].highTempCount = 0;
+        }
+        
+        // Check vibration
+        if (rack.vibration > CONFIG.VIBRATION_THRESHOLD) {
+          rack.faults.push(`Excessive Vibration (${rack.vibration.toFixed(1)}mm/s)`);
+        }
+        
+        // Check power spikes
+        if (rack.power > CONFIG.POWER_THRESHOLD) {
+          rack.faults.push(`Power Spike (${rack.power.toFixed(1)}W)`);
+        }
+        
+        // Update status based on faults
+        if (rack.faults.length) {
+          rack.status = 'Fault';
+        } else if (rack.status === 'Fault') {
+          // Recovered from fault
+          rack.status = 'Active';
+        }
+        
+        // Update last temp for persistence check
+        faultHistory[rack.id].lastTemp = rack.temp;
+      });
+    }
+
+    function renderDashboard() {
+      // Calculate summary statistics
+      const avgTemp = racks.reduce((sum, r) => sum + r.temp, 0) / racks.length;
+      const avgCooling = racks.reduce((sum, r) => sum + r.cooling, 0) / racks.length;
+      const totalPower = racks.reduce((sum, r) => sum + r.power, 0) / 1000; // Convert to kW
+      const avgHumidity = racks.reduce((sum, r) => sum + r.humidity, 0) / racks.length;
+      const faultyRacks = racks.filter(r => r.faults.length).length;
+
+      // Update overview cards
+      document.getElementById('avgTemp').textContent = `${avgTemp.toFixed(1)} °C`;
+      document.getElementById('avgCooling').textContent = `${avgCooling.toFixed(1)} %`;
+      document.getElementById('heatReuse').textContent = `${dataCenterStats.totalHeatReuse.toFixed(1)} kWh`;
+      document.getElementById('faultyRacks').textContent = faultyRacks;
+      document.getElementById('totalPower').textContent = `${totalPower.toFixed(1)} kW`;
+      document.getElementById('avgHumidity').textContent = `${avgHumidity.toFixed(1)} %`;
+
+      // Render all maps
+      renderHeatMap();
+      renderCoolingMap();
+      renderVibrationMap();
+      renderPowerMap();
+      renderFaultMap();
+      renderHumidityMap();
+    }
+
+     // Update the renderRackGroup function with this:
+  function renderRackGroup(container, racks, getColor, getValue) {
+    container.innerHTML = `
+      <div class="quadrant-container">
+        <!-- North-West Quadrant -->
+        <div class="quadrant north-west">
+          <div class="quadrant-title">North-West Quadrant</div>
+          <div class="quadrant-grid">
+            ${renderRacks(racks.slice(0, 6), getColor, getValue)}
+          </div>
+        </div>
+        
+        <!-- North-East Quadrant -->
+        <div class="quadrant north-east">
+          <div class="quadrant-title">North-East Quadrant</div>
+          <div class="quadrant-grid">
+            ${renderRacks(racks.slice(6, 12), getColor, getValue)}
+          </div>
+        </div>
+        
+        <!-- South-West Quadrant -->
+        <div class="quadrant south-west">
+          <div class="quadrant-title">South-West Quadrant</div>
+          <div class="quadrant-grid">
+            ${renderRacks(racks.slice(12, 18), getColor, getValue)}
+          </div>
+        </div>
+        
+        <!-- South-East Quadrant -->
+        <div class="quadrant south-east">
+          <div class="quadrant-title">South-East Quadrant</div>
+          <div class="quadrant-grid">
+            ${renderRacks(racks.slice(18, 24), getColor, getValue)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Keep the existing renderRacks function
+  function renderRacks(racks, getColor, getValue) {
+    return racks.map(rack => `
+      <div class="rack ${getStatusClass(rack)} ${rack.status === 'Idle' ? 'idle' : ''}" 
+           style="background: ${rack.status === 'Idle' ? '#333' : getColor(rack)}">
+        <div class="rack-id">${rack.id}</div>
+        ${rack.status === 'Idle' ? 
+          '<div class="idle-indicator">IDLE</div>' : 
+          `<div class="rack-content">
+            <div class="rack-value">${getValue(rack)}</div>
+            <div class="rack-status ${getStatusClass(rack)}">${rack.status}</div>
+            ${rack.faults.length ? `
+              <div class="fault-reason">
+                ${rack.faults.join('<br>')}
+              </div>
+            ` : ''}
+          </div>`
+        }
+      </div>
+    `).join('');
+  }
+    function renderHeatMap() {
+      const grid = document.getElementById('heatGrid');
+      renderRackGroup(grid, racks, 
+        rack => getTempColor(rack.temp),
+        rack => `${rack.temp.toFixed(1)}°C`
+      );
+    }
+
+    function renderCoolingMap() {
+      const grid = document.getElementById('coolingGrid');
+      renderRackGroup(grid, racks,
+        rack => getCoolingColor(rack.cooling),
+        rack => `${rack.cooling.toFixed(1)}%`
+      );
+    }
+
+    function renderVibrationMap() {
+      const grid = document.getElementById('vibrationGrid');
+      renderRackGroup(grid, racks,
+        rack => getVibrationColor(rack.vibration),
+        rack => `${rack.vibration.toFixed(1)}mm/s`
+      );
+    }
+
+    function renderPowerMap() {
+      const grid = document.getElementById('powerGrid');
+      renderRackGroup(grid, racks,
+        rack => getPowerColor(rack.power),
+        rack => `${rack.power.toFixed(1)}W`
+      );
+    }
+
+    function renderFaultMap() {
+      const grid = document.getElementById('faultGrid');
+      renderRackGroup(grid, racks,
+        rack => rack.faults.length ? '#ff5252' : '#1e1e1e',
+        rack => rack.faults.length ? rack.faults[0] : 'Normal'
+      );
+    }
+
+    function renderHumidityMap() {
+      const grid = document.getElementById('humidityGrid');
+      renderRackGroup(grid, racks,
+        rack => getHumidityColor(rack.humidity),
+        rack => `${rack.humidity.toFixed(1)}%`
+      );
+    }
+
+    // Helper functions
+    function getStatusClass(rack) {
+      return `status-${rack.status.toLowerCase()}`;
+    }
+
+    function getTempColor(temp) {
+      if (temp > CONFIG.TEMP_THRESHOLD) return '#ff5252';
+      if (temp > CONFIG.TEMP_WARNING) return '#ff9800';
+      if (temp > 50) return '#ffd740';
+      if (temp > 40) return '#69f0ae';
+      return '#40c4ff';
+    }
+
+    function getCoolingColor(cooling) {
+      if (cooling > 80) return '#00e5ff';
+      if (cooling > 60) return '#26c6da';
+      if (cooling > 40) return '#4dd0e1';
+      return '#80deea';
+    }
+
+    function getVibrationColor(vibration) {
+      if (vibration > CONFIG.VIBRATION_THRESHOLD) return '#ff5252';
+      if (vibration > CONFIG.VIBRATION_THRESHOLD * 0.8) return '#ff9800';
+      return '#69f0ae';
+    }
+
+    function getPowerColor(power) {
+      if (power > CONFIG.POWER_THRESHOLD) return '#ff5252';
+      if (power > CONFIG.POWER_THRESHOLD * 0.9) return '#ff9800';
+      return '#69f0ae';
+    }
+
+    function getHumidityColor(humidity) {
+      if (humidity > CONFIG.HUMIDITY_THRESHOLD) return '#ff5252';
+      if (humidity > 55) return '#ff9800';
+      return '#40c4ff';
+    }
+
+    function showTab(tabId) {
+      // Update active tab button
+      document.querySelectorAll('nav button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(tabId));
+      });
+      
+      // Update active tab content
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.toggle('active', tab.id === tabId);
+      });
+    }
+  </script>
+</body>
+</html>
